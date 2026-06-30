@@ -18,6 +18,13 @@ import {
 
 const adminAuthStorageKey = "church-attendance-admin-v1";
 const today = new Date().toISOString().slice(0, 10);
+
+type MemberWithCounts = Member & {
+  attendedCount: number;
+  absentCount: number;
+  todayStatus: string;
+};
+
 const seededImportText = `1	لوسيا ذكريا جاد بباوي			kg
 2	ايناس منير مهني سليمان			kgامينه فصل
 3	بسنت حنا خليل حنا			kg
@@ -438,16 +445,35 @@ export default function Home() {
     void persistMembers();
   }, [members, isLoaded]);
 
+  const membersWithCounts = useMemo<MemberWithCounts[]>(
+    () =>
+      members.map((member) => {
+        const attended = member.attendance.filter((entry) => entry.present).length;
+        const absent = member.attendance.filter((entry) => entry.present === false).length;
+        const todayRecord = member.attendance.find((entry) => entry.date === date);
+
+        return {
+          ...member,
+          attendedCount: attended,
+          absentCount: absent,
+          todayStatus: todayRecord ? (todayRecord.present ? "Present" : "Absent") : "Pending",
+        };
+      }),
+    [members, date]
+  );
+
   const filteredMembers = useMemo(() => {
-    const matches = searchMembers(members, search);
+    const matches = searchMembers(membersWithCounts, search);
 
     if (stageFilter === "all") {
       return matches;
     }
 
     return matches.filter((member) => member.stage === stageFilter);
-  }, [members, search, stageFilter]);
+  }, [membersWithCounts, search, stageFilter]);
+
   const summary = useMemo(() => getAttendanceSummary(members, date), [members, date]);
+
   const stageBreakdown = useMemo(() => {
     const counts = members.reduce<Record<string, number>>((accumulator, member) => {
       const record = member.attendance.find((entry) => entry.date === date);
@@ -511,6 +537,15 @@ export default function Home() {
     setMembers((current) => [...current, nextMember]);
     setForm({ name: "", code: "", stage: "" });
     setMessage(`Added ${nextMember.name} successfully.`);
+  };
+
+  const handleSaveToday = async () => {
+    try {
+      await saveMembers(members);
+      setMessage("Saved today's attendance successfully.");
+    } catch {
+      setMessage("Unable to save today's attendance. Please try again.");
+    }
   };
 
   const importMembers = (event: FormEvent) => {
@@ -596,6 +631,13 @@ export default function Home() {
                   className="w-full rounded-xl border border-amber-400/30 bg-slate-950 px-3 py-2 text-sm text-white outline-none"
                 />
               </div>
+              <button
+                type="button"
+                onClick={handleSaveToday}
+                className="rounded-xl border border-emerald-400/30 bg-emerald-900 px-3 py-2 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-800"
+              >
+                Save Today's Attendance
+              </button>
               <button
                 type="button"
                 onClick={handleLogout}
@@ -738,6 +780,9 @@ export default function Home() {
                       <div>
                         <p className="font-semibold text-white">{member.name}</p>
                         <p className="text-sm text-slate-400">Code: {member.code} • Stage: {member.stage}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Present: {member.attendedCount} • Absent: {member.absentCount} • Today: {member.todayStatus}
+                        </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isPresent ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-700 text-slate-300"}`}>

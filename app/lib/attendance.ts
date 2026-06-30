@@ -220,7 +220,7 @@ export function parseMemberText(text: string): Member[] {
   return parseMemberDataset(parsed);
 }
 
-export function searchMembers(members: Member[], query: string): Member[] {
+export function searchMembers<T extends Member>(members: T[], query: string): T[] {
   const term = query.trim();
 
   if (!term) {
